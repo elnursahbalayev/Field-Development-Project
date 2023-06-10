@@ -48,3 +48,6 @@ with data_tab:
     st.download_button(label='Whole data before cutoff', data=df.to_csv(), file_name='before_cutoff.csv', mime='text/csv')
     st.download_button(label='Whole data after cutoff', data=df_cutted.to_csv(), file_name='after_cutoff.csv', mime='text/csv')
     st.download_button(label='Reservoir data', data=df_reservoir.to_csv(), file_name='reservoir.csv', mime='text/csv')
+
+with monte_carlo_tab:
+    pass

@@ -241,3 +241,6 @@ def process_stoip(df, cut_offs, necessary_values):
 
     df.reset_index(drop=True, inplace=True)
     return df
+
+def process_monte_carlo(df):
+    pass
