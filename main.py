@@ -21,7 +21,6 @@ with data_tab:
     df = f.process_data(df, necessary_values)
 
     st.divider()
-    st.write('download the file will be here')
     
 
 # Adding content to the well logs tab
