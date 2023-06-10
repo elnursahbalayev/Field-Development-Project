@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 def upload_file():
@@ -32,6 +34,9 @@ def get_necessary_data():
     necessary_values['SIM_A_FITTING_COEFFICIENT'] =[1.110196874]
     necessary_values['SIM_M_CEMENTATION_FACTOR'] = [1.5568]
     necessary_values['SIM_N_SATURATION_EXPONENT'] = [2]
+
+    necessary_values['Bg'] = [st.number_input('Bg', value=0.0035)]
+    necessary_values['Bo'] = [st.number_input('Bo', value=1.169)]
 
     return necessary_values
 
@@ -103,14 +108,6 @@ def calculate_sw_simandoux(df, necessary_values):
     return df
 
 @st.cache_data
-def cut_off_prep_vsh(df):
-    df.sort_values(by='Vsh (Larionov Tertiary)', inplace=True)
-    df['Hydrocarbon cumulative'] = df['Hydrocarbon column'].cumsum() * 100 / df['Hydrocarbon column'].cumsum().max()
-    df.dropna(inplace=True)
-    return df
-
-
-@st.cache_data
 def process_data(df, necessary_values):
     df = replace_null(df)
     df = rename_columns(df)
@@ -121,5 +118,126 @@ def process_data(df, necessary_values):
     df = calculate_sonic_log(df, necessary_values)
     df = calculate_average_porosity(df)
     df = calculate_sw_simandoux(df, necessary_values)
+    return df
 
+@st.cache_data
+def cut_off_prep_vsh(df):
+    df.sort_values(by='Vsh (Larionov Tertiary)', inplace=True)
+    df['Hydrocarbon cumulative'] = df['Hydrocarbon column'].cumsum() * 100 / df['Hydrocarbon column'].cumsum().max()
+    df.dropna(inplace=True)
+    return df
+
+@st.cache_data
+def plot_cut_off_vsh(df):
+    fig = plt.figure()
+    sns.scatterplot(data=df, x='Vsh (Larionov Tertiary)', y='Hydrocarbon cumulative', linewidth=0.1)
+    return fig
+
+@st.cache_data
+def cut_off_remove_vsh(df, shale_cut_off_point):
+    df = df[df['Vsh (Larionov Tertiary)'] < shale_cut_off_point]
+    return df
+    
+@st.cache_data
+def cut_off_prep_porosity(df):
+    df.sort_values(by='Effective Porosity', inplace=True, ascending=False)
+    df['Hydrocarbon cumulative'] = df['Hydrocarbon column'].cumsum() * 100 / df['Hydrocarbon column'].cumsum().max()
+    df.dropna(inplace=True)
+    return df
+
+@st.cache_data
+def plot_cut_off_porosity(df):
+    fig = plt.figure()
+    sns.scatterplot(data=df, x='Effective Porosity', y='Hydrocarbon cumulative', linewidth=0.1)
+    return fig
+
+@st.cache_data
+def cut_off_remove_porosity(df, porosity_cut_off_point):
+    df = df[df['Effective Porosity'] > porosity_cut_off_point]
+    return df
+
+@st.cache_data
+def cut_off_prep_sw(df):
+    df.sort_values(by='Sw (Simandoux Corrected)', inplace=True)
+    df['Hydrocarbon cumulative'] = df['Hydrocarbon column'].cumsum() * 100 / df['Hydrocarbon column'].cumsum().max()
+    return df
+
+@st.cache_data
+def plot_cut_off_sw(df):
+    fig = plt.figure()
+    sns.scatterplot(data=df, x='Sw (Simandoux Corrected)', y='Hydrocarbon cumulative', linewidth=0.1)
+    return fig
+
+@st.cache_data
+def cut_off_remove_sw(df, sw_cut_off_point):
+    df = df[df['Sw (Simandoux Corrected)'] < sw_cut_off_point]
+    return df
+
+def process_cut_offs(df):
+    df = cut_off_prep_vsh(df)
+    fig = plot_cut_off_vsh(df)
+    st.pyplot(fig)
+    shale_cut_off_point = st.number_input('Please enter Vsh cutoff point', value=0.25)
+    df = cut_off_remove_vsh(df, shale_cut_off_point)
+
+    df = cut_off_prep_porosity(df)
+    fig = plot_cut_off_porosity(df)
+    st.pyplot(fig)
+    porosity_cut_off_point = st.number_input('Please enter Porosity cutoff point', value=0.16)
+    df = cut_off_remove_porosity(df, porosity_cut_off_point)
+
+    df = cut_off_prep_sw(df)
+    fig = plot_cut_off_sw(df)
+    st.pyplot(fig)
+    sw_cut_off_point = st.number_input('Please enter Sw cutoff point', value=0.37)
+    df = cut_off_remove_sw(df, sw_cut_off_point)
+
+    df.sort_values(by='Depth (MSL)', inplace=True)
+    df.reset_index(drop=True, inplace=True)
+
+    cut_offs = [shale_cut_off_point, porosity_cut_off_point, sw_cut_off_point]
+    return df, cut_offs
+
+@st.cache_data
+def limit_top_bottom(df, necessary_values):
+    df = df[(df['Depth (MSL)']>necessary_values['Top of Reservoir'].values[0]) & (df['Depth (MSL)']<necessary_values['Water Oil Contact (WOC)'].values[0])]
+    return df
+
+@st.cache_data
+def apply_cut_offs(df, cut_offs):
+    df['Rock Type'] = np.where((df['Vsh (Larionov Tertiary)'] > cut_offs[0]) | (df['Effective Porosity']<cut_offs[1]) | (df['Sw (Simandoux Corrected)']>cut_offs[2]), 'Non-reservoir', 'Reservoir')
+    return df
+
+@st.cache_data
+def find_ntg(df_oil, df_gas):
+    NET_TO_GROSS_OIL =df_oil['Rock Type'].value_counts()['Reservoir'] /len(df_oil)
+    NET_TO_GROSS_GAS =df_gas['Rock Type'].value_counts()['Reservoir'] /len(df_gas)
+    ntg_values = [NET_TO_GROSS_OIL, NET_TO_GROSS_GAS]
+    return ntg_values
+
+@st.cache_data
+def find_hiip(df_oil, df_gas, necessary_values, ntg_values):
+    GIIP = 43560 * 203629 * ntg_values[1] * df_gas['Effective Porosity'].mean() * df_gas['Sw (Simandoux Corrected)'].mean() / necessary_values['Bg'].values[0]
+    STOIP = 7758 * 169608.54 * ntg_values[0] * df_oil['Effective Porosity'].mean() * df_oil['Sw (Simandoux Corrected)'].mean() / necessary_values['Bo'].values[0]
+    hiip_values = [STOIP/1000000, GIIP/1000000000]
+    return hiip_values
+
+@st.cache_data
+def process_stoip(df, cut_offs, necessary_values):
+    df = limit_top_bottom(df, necessary_values)
+    df = apply_cut_offs(df, cut_offs)
+    st.write(df['Rock Type'].value_counts())
+
+    df_gas = df[df['Depth (MSL)']<necessary_values['Gas Oil Contact (GOC)'].values[0]]
+    df_oil = df[df['Depth (MSL)']>necessary_values['Gas Oil Contact (GOC)'].values[0]]
+
+    ntg_values = find_ntg(df_oil, df_gas)
+    st.write('Net to Gross Oil: ', np.round(ntg_values[0],2))
+    st.write('Net to Gross Gas: ', np.round(ntg_values[1],2))
+
+    hiip_values = find_hiip(df_oil, df_gas, necessary_values, ntg_values)
+    st.write('STOIP: ', np.round(hiip_values[0],2), 'MMSTB')
+    st.write('GIIP: ', np.round(hiip_values[1],2), 'BCF')
+
+    df.reset_index(drop=True, inplace=True)
     return df

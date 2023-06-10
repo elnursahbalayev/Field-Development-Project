@@ -6,6 +6,7 @@ import seaborn as sns
 @st.cache_data
 def compare_densities_plot(df):
 
+    df.sort_values('Depth (MSL)', inplace=True)
     fig = plt.figure(figsize=(10, 20))
 
     plt.subplot(1, 4, 1)
@@ -50,6 +51,26 @@ def compare_densities_plot(df):
     plt.xlim(0,1)
     plt.xlabel('Porosity (Comparison)')
     plt.legend(['Density', 'Neutron', 'Sonic'])
+
+    ax = plt.gca()
+    ax.xaxis.tick_top()
+    ax.xaxis.set_label_position('top')
+    ax.xaxis.set_ticks_position('none')
+
+    plt.tight_layout()
+    plt.show()
+
+    return fig
+
+@st.cache_data
+def plot_vs_depth(df, choice):
+    df.sort_values('Depth (MSL)', inplace=True)
+    fig = plt.figure(figsize=(5, 12))
+
+    plt.plot(df[choice],df['Depth (MSL)'])
+    plt.ylim(max(df['Depth (MSL)']), min(df['Depth (MSL)']))
+    plt.xlabel(choice)
+    plt.ylabel('Depth (MSL) (ft)')
 
     ax = plt.gca()
     ax.xaxis.tick_top()
