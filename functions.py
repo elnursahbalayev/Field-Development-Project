@@ -10,6 +10,9 @@ def upload_file():
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
         return df
+    else:
+        df = pd.read_csv('GM_1_labelled.csv')
+        return df
     
 def get_necessary_data():
     necessary_values = pd.DataFrame()
